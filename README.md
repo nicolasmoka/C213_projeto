@@ -1,7 +1,9 @@
-# C213_projeto
+# Projeto de Identificação de Sistemas e Controle PID
+###
 
-Instalar requerimentos:
-
+### Criar ambiente virtual e instalar requerimentos
 ```bash
+python -m venv c13
+c13\Scripts\activate
 pip install -r requirements.txt
 ```
