@@ -17,8 +17,9 @@ tiempo = dataset ["tiempo"]
 # Classe que agrupa funções de filtragem dos dados
 class filtragem:
 
-    def filtrar_Configuracao_Experimento(self):
-        item = self[0][0]
+    @staticmethod
+    def filtrar_Configuracao_Experimento(data):
+        item = data[0][0]
         valor1 = item[0].item()   # 150 (int)
         valor2 = item[1].item()   # 0.5 (float)
         valor3 = item[2].item()   # 0 (int)
@@ -33,8 +34,9 @@ class filtragem:
 
         return dict
 
-    def filtrar_Parametros_Sistema(self):
-        item = self[0][0]
+    @staticmethod
+    def filtrar_Parametros_Sistema(data):
+        item = data[0][0]
         valores = []
         for elem in item:
             if hasattr(elem, "item"):  # Se for array numérico
@@ -62,26 +64,31 @@ class filtragem:
 
         return dicionario
 
-    def filtrar_Dados_Entrada(self):
-        variavel_entrada = self[:, 0].tolist()  # valor crescente de +0.5 coluna 1
-        degrau_valor_fixo_60 = self[:, 1].tolist() # valor fixo d e60 coluna 2
+    @staticmethod
+    def filtrar_Dados_Entrada(data):
+        variavel_entrada = data[:, 0].tolist()  # valor crescente de +0.5 coluna 1
+        degrau_valor_fixo_60 = data[:, 1].tolist() # valor fixo d e60 coluna 2
         return variavel_entrada, degrau_valor_fixo_60
 
-    def filtrar_Dados_Saida(self):
-        variavel_saida = self[:, 0].tolist() # valor crescente de +0.5
-        coluna2 = self[:, 1].tolist()
+    @staticmethod
+    def filtrar_Dados_Saida(data):
+        variavel_saida = data[:, 0].tolist() # valor crescente de +0.5
+        coluna2 = data[:, 1].tolist()
         return variavel_saida, coluna2
 
-    def filtrar_Entrada(self):
-        entrada = self[0,:].tolist()
+    @staticmethod
+    def filtrar_Entrada(data):
+        entrada = data[0,:].tolist()
         return entrada
     
-    def filtrar_Salida(self):
-        salida = self[0,:].tolist()
+    @staticmethod
+    def filtrar_Salida(data):
+        salida = data[0,:].tolist()
         return salida
     
-    def filtrar_Tiempo(self):
-        tiempo = self[0,:].tolist()
+    @staticmethod
+    def filtrar_Tiempo(data):
+        tiempo = data[0,:].tolist()
         return tiempo
 
 print("Configuração do Experimento:")
