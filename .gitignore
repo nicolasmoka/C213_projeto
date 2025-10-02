@@ -416,3 +416,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+ControlePID.ipynb
+PROJETO_C213 CONTROLE_PID.pdf

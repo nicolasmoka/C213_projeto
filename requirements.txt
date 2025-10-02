@@ -1,3 +1,4 @@
 SciPy
-Pandas
 control
+PyQt5
+pyqtgraph
