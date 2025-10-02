@@ -1,53 +1,39 @@
+import numpy as np
+import scipy.io
 
-import matplotlib.pyplot as plt
-import control as ctrl
-from scipy.io import loadmat
-import numpy as np 
-#Importaçao do dataset .mat
-dataset = loadmat('datasets/Dataset_Grupo1_c213.mat')
-
-#Extração das variáveis do dicionário retornado pelo loadmat 
-configurcao_experimento = dataset["configuracion_experimento"]
-parametros_sistema = dataset["parametros_sistema"]
-dados_entrada = dataset["dados_entrada"]
-dados_saida = dataset["dados_saida"]
-entrada = dataset["entrada"]
-salida = dataset["salida"]
-tiempo = dataset ["tiempo"]
-
+def _safe_item(x):
+    try:
+        return x.item()
+    except Exception:
+        return x
 class filtragem:
-
     @staticmethod
     def filtrar_Configuracao_Experimento(data):
         item = data[0][0]
-        valor1 = item[0].item()   # 150 (int)
-        valor2 = item[1].item()   # 0.5 (float)
-        valor3 = item[2].item()   # 0 (int)
-        texto  = item[3].item()   # string "Escalón desde 0% - Alineamiento Smith perfecto"
-
-        dict = {
+        valor1 = item[0].item()
+        valor2 = item[1].item()
+        valor3 = item[2].item()
+        texto  = item[3].item()
+        return {
             "tiempo_total":valor1,
             "dt": valor2,
             "degrau_tiempo":valor3,
             "descripcion":texto
         }
 
-        return dict
-
     @staticmethod
     def filtrar_Parametros_Sistema(data):
         item = data[0][0]
         valores = []
         for elem in item:
-            if hasattr(elem, "item"):  # Se for array numérico
+            if hasattr(elem, "item"):
                 try:
                     valores.append(elem.item())
                 except:
-                    valores.append(elem[0])  # Caso seja array de string
+                    valores.append(elem[0])
             else:
                 valores.append(elem)
-
-        dicionario = {
+        return {
             "k": valores[0],
             "tau": valores[1],
             "theta": valores[2],
@@ -59,20 +45,18 @@ class filtragem:
             "valor_final_teorico": valores[8],
             "valor_final_real": valores[9],
             "error_simulacion": valores[10],
-            "descripcion": valores[11]  # pega a string, ignora o array duplicado
+            "descripcion": valores[11]
         }
-
-        return dicionario
 
     @staticmethod
     def filtrar_Dados_Entrada(data):
-        variavel_entrada = data[:, 0].tolist()  # valor crescente de +0.5 coluna 1
-        degrau_valor_fixo_60 = data[:, 1].tolist() # valor fixo d e60 coluna 2
+        variavel_entrada = data[:, 0].tolist()
+        degrau_valor_fixo_60 = data[:, 1].tolist()
         return variavel_entrada, degrau_valor_fixo_60
 
     @staticmethod
     def filtrar_Dados_Saida(data):
-        variavel_saida = data[:, 0].tolist() # valor crescente de +0.5
+        variavel_saida = data[:, 0].tolist()
         coluna2 = data[:, 1].tolist()
         return variavel_saida, coluna2
 
@@ -80,24 +64,24 @@ class filtragem:
     def filtrar_Entrada(data):
         entrada = data[0,:].tolist()
         return entrada
-    
+
     @staticmethod
     def filtrar_Salida(data):
         salida = data[0,:].tolist()
         return salida
-    
+
     @staticmethod
     def filtrar_Tiempo(data):
         tiempo = data[0,:].tolist()
         return tiempo
-    
+
     @staticmethod
     def parametrosSistema(data):
         k = data["k"]
         tau = data["tau"]
         theta = data["theta"]
         return (k,tau,theta)
-    
+
     @staticmethod
     def calcularCHR(data):
         k,T,theta = data
@@ -114,83 +98,36 @@ class filtragem:
         Td = T * 0.308 * ((theta/T)**(0.929))
         return (kp,Ti,Td)
 
-print("Configuração do Experimento:")
-print(filtragem.filtrar_Configuracao_Experimento(configurcao_experimento))
-print("-" * 80)
-
-print("Parâmetros do Sistema:")
-print(filtragem.filtrar_Parametros_Sistema(parametros_sistema))
-
-print("Dados de Entrada:")
-print(filtragem.filtrar_Dados_Entrada(dados_entrada))
-print("-" * 80)
-
-print("Dados de Saída:")
-print(filtragem.filtrar_Dados_Saida(dados_saida))
-print("-" * 80)
-
-print("Entrada:")
-print(filtragem.filtrar_Entrada(entrada))
-print("-" * 80)
-
-print("Saída:")
-print(filtragem.filtrar_Salida(salida))
-print("-" * 80)
-
-print("Tempo:")
-print(filtragem.filtrar_Tiempo(tiempo))
-print("-" * 80)
-
-dados = filtragem.filtrar_Salida(salida)
-x = range(len(dados))
-
-# plotar
-plt.figure(figsize=(12, 6))
-plt.plot(x, dados, label="Sinal")
-plt.xlabel("Índice")
-plt.ylabel("Valor")
-plt.title("Plot da Lista de Valores")
-plt.legend()
-plt.grid(True)
-plt.show()
-
-
-'''
-dic = filtragem.filtrar_Parametros_Sistema(parametros_sistema)
-K,tau,theta  = filtragem.parametrosSistema(dic)
-
-Kp, Ti, Td = filtragem.calcularCHR([K,tau,theta])
-
-sys = ctrl.tf([K], [tau, 1])
-
-# Aproximação de Padé para o atraso
-num, den = ctrl.pade(theta, 20)
-sys_pade = ctrl.tf(num, den)
-sys_atraso = ctrl.series(sys, sys_pade)
-
-# ---- PID COM VALORES FIXOS ----
-
-PID = ctrl.tf([Kp*Td, Kp, Kp/Ti], [1, 0])
-
-# Sistema em malha fechada
-Cs = ctrl.series(PID, sys_atraso)
-T = np.linspace(0, 150, 500)   # usa seu vetor fixo de tempo
-t, y = ctrl.step_response(ctrl.feedback(Cs), T)
-
-# Plota com amplitude escalada
-amplitude = 60.0
-plt.figure(figsize=(6,4))
-plt.plot(t, y*amplitude, label='PID')
-plt.title('Sistema com Controle PID (valores fixos)')
-plt.xlabel('Tempo (s)')
-plt.ylabel('Amplitude')
-plt.grid(True)
-plt.legend()
-plt.show()
-
-# Informações do sistema
-infos_PID = ctrl.step_info(ctrl.feedback(Cs))
-print('Parâmetros do Sistema Controlado:')
-print(f'  - Tempo de subida: {infos_PID.get("RiseTime"):.2f} s')
-print(f'  - Overshoot: {infos_PID.get("Overshoot"):.2f} %')
-'''
+# wrapper de conveniência: retorna dicionário padronizado
+def load_mat(path):
+    mat = scipy.io.loadmat(path)
+    out = {}
+    keys = mat.keys()
+    if "configuracion_experimento" in mat:
+        out["config"] = filtragem.filtrar_Configuracao_Experimento(mat["configuracion_experimento"])
+    if "parametros_sistema" in mat:
+        out["params"] = filtragem.filtrar_Parametros_Sistema(mat["parametros_sistema"])
+    if "dados_entrada" in mat:
+        u1, u2 = filtragem.filtrar_Dados_Entrada(mat["dados_entrada"])
+        out["dados_entrada"] = {"u": u1, "u_fixed": u2}
+    if "dados_saida" in mat:
+        y1, y2 = filtragem.filtrar_Dados_Saida(mat["dados_saida"])
+        out["dados_saida"] = {"y": y1, "col2": y2}
+    if "entrada" in mat:
+        out["entrada"] = filtragem.filtrar_Entrada(mat["entrada"])
+    if "salida" in mat:
+        out["salida"] = filtragem.filtrar_Salida(mat["salida"])
+    if "tiempo" in mat:
+        out["tiempo"] = filtragem.filtrar_Tiempo(mat["tiempo"])
+    # se tempo não existir, tenta criar a partir de config dt
+    if "tiempo" not in out and "config" in out:
+        dt = out["config"]["dt"]
+        n = len(out["dados_saida"]["y"]) if "dados_saida" in out else 1
+        out["tiempo"] = [i * dt for i in range(n)]
+    # parâmetros do sistema padronizados
+    if "params" in out:
+        out["K"] = out["params"]["k"]
+        out["tau"] = out["params"]["tau"]
+        out["theta"] = out["params"]["theta"]
+        out["amplitude"] = out["params"].get("amplitude_escalon", out["params"].get("entrada_final", None))
+    return out
