@@ -3,7 +3,7 @@
 
 ### Criar ambiente virtual e instalar requerimentos
 ```bash
-python -m venv c13
-c13\Scripts\activate
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 ```
