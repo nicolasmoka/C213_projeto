@@ -9,14 +9,8 @@ SAVGOL_POLYORDER = 3
 PADE_ORDER = 10
 
 def _find_first_crossing_time(y, t, target):
-    """
-    Encontra a primeira vez em que y cruza 'target'.
-    Faz interpolação linear entre amostras (i-1,i).
-    Retorna time float; se não encontrado, retorna None.
-    """
     y = np.asarray(y)
     t = np.asarray(t)
-    # procura primeiro i tal que y[i] >= target
     for i in range(1, len(y)):
         if (y[i-1] <= target <= y[i]) or (y[i-1] >= target >= y[i]):
             y0, y1 = y[i-1], y[i]
@@ -28,9 +22,17 @@ def _find_first_crossing_time(y, t, target):
     return None
 
 def smith_identification(t, y, amplitude=1.0, do_savgol=True, window=SAVGOL_WINDOW, polyorder=SAVGOL_POLYORDER, pade_order=PADE_ORDER):
-    t = np.asarray(t)
-    y = np.asarray(y)
-    # smoothing
+    """
+    Retorna (params, t_model, y_model)
+    - params: dict com k,tau,theta,eqm
+    - t_model, y_model: tempo e saída simulada do modelo (no mesmo domínio de t_sim usado na simulação).
+    """
+    t = np.asarray(t).ravel()
+    y = np.asarray(y).ravel()
+    if t.size == 0 or y.size == 0:
+        raise ValueError("t or y empty in smith_identification")
+
+    # smoothing opcional para localizar melhor t1/t2
     if do_savgol and len(y) >= 5:
         w = window
         if w >= len(y):
@@ -48,7 +50,6 @@ def smith_identification(t, y, amplitude=1.0, do_savgol=True, window=SAVGOL_WIND
 
     y0 = float(y_s[0]); yf = float(y_s[-1])
     delta = yf - y0
-    # percentis Smith (PDF)
     p1 = 0.283
     p2 = 0.632
     v1 = y0 + p1 * delta
@@ -57,9 +58,7 @@ def smith_identification(t, y, amplitude=1.0, do_savgol=True, window=SAVGOL_WIND
     t1 = _find_first_crossing_time(y_s, t, v1)
     t2 = _find_first_crossing_time(y_s, t, v2)
 
-    # fallbacks
     if t1 is None:
-        # nearest index
         idx1 = (np.abs(y_s - v1)).argmin()
         t1 = float(t[idx1])
     if t2 is None:
@@ -68,29 +67,36 @@ def smith_identification(t, y, amplitude=1.0, do_savgol=True, window=SAVGOL_WIND
 
     tau = 1.5 * (t2 - t1)
     theta = t2 - tau
-    if amplitude == 0:
+    tau = float(max(tau, 1e-6))
+    theta = float(max(theta, 0.0))
+
+    # ganho K ajustado pela amplitude do degrau do dataset
+    if amplitude == 0 or amplitude is None:
         K = yf - y0
     else:
         K = (yf - y0) / amplitude
 
-    # simulate open-loop model using plant with pade
     model = SystemModel(K, tau, theta, pade_order=pade_order)
     try:
+        # simulate on the experimental time grid (t) so t_sim == t; keep t_model for clarity
         t_sim, y_sim = model.simulate_step_openloop(t)
     except Exception:
-        # fallback: use linspace
+        # fallback: return something aligned to t
         t_sim = t
-        y_sim = np.interp(t_sim, t, y)  # fallback approximate
+        y_sim = np.interp(t, t, y)
 
-    # ensure float arrays
-    t_sim = np.asarray(t_sim).astype(float)
-    y_sim = np.asarray(y_sim).astype(float)
+    t_sim = np.asarray(t_sim).astype(float).ravel()
+    y_sim = np.asarray(y_sim).astype(float).ravel()
 
-    # interpolate model to experimental t (safe usage of interp1d):
-    f_sim = interp1d(t_sim, y_sim, bounds_error=False, fill_value=(y_sim[0], y_sim[-1]))
-    y_hat = f_sim(t)
+    # agora y_model (y_sim) está no grid t_sim. Para EQM, interpole y_sim em t experimental (t).
+    try:
+        f_sim = interp1d(t_sim, y_sim, bounds_error=False, fill_value="extrapolate")
+        y_hat_on_t = f_sim(t)    # y_hat interpolado para o grid experimental
+    except Exception:
+        y_hat_on_t = np.interp(t, t_sim, y_sim)
 
-    eqm_val = eqm(y, y_hat)
+    eqm_val = eqm(y, y_hat_on_t)
 
     params = {"k": float(K), "tau": float(tau), "theta": float(theta), "eqm": float(eqm_val)}
-    return params, t, y_hat
+    # retorno: params, t_model (t_sim), y_model (y_sim)
+    return params, t_sim, y_sim
