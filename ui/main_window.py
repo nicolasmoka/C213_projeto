@@ -113,7 +113,7 @@ class MainWindow(QMainWindow):
         for w in (self.tr_field, self.ts_field, self.mp_field):
             w.setReadOnly(True); w.setFixedWidth(120)
 
-        pid_form.addRow("Kp:", self.kp_input); pid_form.addRow("Ti:", self.ti_input); pid_form.addRow("Td:", self.td_input); pid_form.addRow("λ:", self.lambda_input)
+        pid_form.addRow("Kp:", self.kp_input); pid_form.addRow("Ti:", self.ti_input); pid_form.addRow("Td:", self.td_input); #pid_form.addRow("λ:", self.lambda_input)
         pid_form.addRow("SP:", self.sp_input)
         pid_form.addRow("tr:", self.tr_field); pid_form.addRow("ts:", self.ts_field); pid_form.addRow("Mp:", self.mp_field)
         right_layout_pid.addLayout(pid_form)
