@@ -1,7 +1,7 @@
 import numpy as np
 import control as ctrl
 
-PADE_ORDER_DEFAULT = 10
+PADE_ORDER_DEFAULT = 20
 
 class SystemModel:
     def __init__(self, K=1.0, tau=1.0, theta=0.0, pade_order=PADE_ORDER_DEFAULT):
@@ -23,6 +23,29 @@ class SystemModel:
         t, y = ctrl.step_response(plant, T)
         return t, np.asarray(y)
 
+    def simulate_forced_response(self, T, U):
+        """Simula resposta forçada (open-loop) da planta para o sinal de entrada U.
+
+        T: tempo (array)
+        U: sinal de entrada (array com mesmo tamanho de T)
+        Retorna (t_sim, y_sim)
+        """
+        plant = self.tf_with_delay()
+        T = np.asarray(T)
+        U = np.asarray(U, dtype=float)
+        # if sizes differ, interpolate U to T
+        if U.shape != T.shape:
+            try:
+                U = np.interp(T, np.linspace(T.min(), T.max(), num=U.size), U)
+            except Exception:
+                U = np.ones_like(T, dtype=float) * float(np.mean(U))
+        try:
+            t_sim, y_sim = ctrl.forced_response(plant, T=T, U=U)[:2]
+        except Exception:
+            resp = ctrl.forced_response(plant, T=T, U=U)
+            t_sim, y_sim = resp[0], resp[1]
+        return np.asarray(t_sim, dtype=float).ravel(), np.asarray(y_sim, dtype=float).ravel()
+
     def simulate_step_closedloop(self, Kp, Ti, Td, T, U=None, step_amplitude=1.0):
         """
         Simula resposta em malha fechada.
@@ -31,7 +54,9 @@ class SystemModel:
         Retorna (t_sim, y_sim) numpy arrays.
         """
         # cria PID e planta (com possível atraso via pade)
-        pid = ctrl.tf([Kp * Td, Kp, Kp / Ti], [1, 0])
+        # guard against Ti being zero
+        Ti_safe = float(Ti) if (Ti is not None and np.isfinite(Ti) and Ti != 0) else 1e-6
+        pid = ctrl.tf([Kp * Td, Kp, Kp / Ti_safe], [1, 0])
         plant = self.tf_with_delay()
         ol = ctrl.series(pid, plant)
         cl = ctrl.feedback(ol, 1)
