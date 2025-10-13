@@ -3,7 +3,9 @@ from Filtragem_dados import filtragem
 
 def chr_from_params(k, tau, theta):
     try:
-        kp, Ti, Td = filtragem.calcularCHR((k, tau, theta))
+        kp = (0.6*(tau))/(k*theta)
+        Ti = tau
+        Td = theta/2
         # sanitize
         kp = float(kp) if np.isfinite(kp := kp) else 0.0
         Ti = float(Ti) if np.isfinite(Ti := Ti) else max(1e-6, float(tau))
