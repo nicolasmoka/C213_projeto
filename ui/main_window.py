@@ -5,7 +5,6 @@ from PyQt5.QtWidgets import (
     QHBoxLayout, QFormLayout, QLineEdit, QComboBox, QFrame
 )
 from PyQt5.QtCore import Qt
-from pyqtgraph import mkPen
 from ui.plot_widget import PlotWidget
 from Filtragem_dados import load_mat
 from identification.smith import smith_identification
@@ -26,7 +25,6 @@ class MainWindow(QMainWindow):
         self.tab_id = QWidget()
         self.tab_pid = QWidget()
         self.tab_inicio = QWidget()
-        # ordem: Inicio, Identificação, Controle PID
         self.tabs.addTab(self.tab_inicio, "Início")
         self.tabs.addTab(self.tab_id, "Identificação")
         self.tabs.addTab(self.tab_pid, "Controle PID")
@@ -47,6 +45,9 @@ class MainWindow(QMainWindow):
 
         info = QLabel(
             "Grupo 1 — Ferramenta de identificação (Smith) e sintonia PID.\n\n"
+            "Diego Nogueira Rezende Vilela.\n\n"
+            "Nicolas Mokarzel Carneiro.\n\n"
+            "Túlio Augusto de Almeida Rezende.\n\n"
             "Ferramentas: PyQt5, PyQtGraph, control, NumPy, SciPy.\n\n"
             "Carregue um dataset na aba Identificação para começar."
         )
@@ -183,8 +184,8 @@ class MainWindow(QMainWindow):
 
             # plota: degrau (u), saída experimental (y) — identificação será chamada automaticamente
             self.plot_id.clear()
-            self.plot_id.plot(t, u, name="Degrau (u)", pen=mkPen(color='#1f77b4', width=1.2))
-            self.plot_id.plot(t, y, name="Saída Experimental (y)", pen=mkPen(color='#111111', width=1.6))
+            self.plot_id.plot(t, u, name="Degrau (u)", color='#1f77b4', linewidth=1.2)
+            self.plot_id.plot(t, y, name="Saída Experimental (y)", color='#111111', linewidth=1.6)
             self.plot_id.autoscale()
 
             # executa identificação automaticamente
@@ -202,7 +203,8 @@ class MainWindow(QMainWindow):
             amplitude = self.current_data.get("amplitude", self.current_data.get("params",{}).get("amplitude_escalon", 1.0))
 
             # smith_identification agora retorna params, t_model, y_model
-            params, t_model, y_model = smith_identification(t, y, amplitude=amplitude)
+            u_data = np.asarray(self.current_u) if hasattr(self, 'current_u') and self.current_u is not None else None
+            params, t_model, y_model = smith_identification(t, y, amplitude=amplitude, u=u_data)
             self.ident_params = params
 
             # preenche campos identificacao
@@ -237,19 +239,27 @@ class MainWindow(QMainWindow):
                 u = np.ones_like(t)
 
             self.plot_id.clear()
-            self.plot_id.plot(t, u, name="Degrau (u)", pen=mkPen(color='#1f77b4', width=1.2))
-            self.plot_id.plot(t, y, name="Saída Experimental (y)", pen=mkPen(color='#111111', width=1.6))
+            self.plot_id.plot(t, u, name="Degrau (u)", color='#1f77b4', linewidth=1.2)
+            self.plot_id.plot(t, y, name="Saída Experimental (y)", color='#111111', linewidth=1.6)
 
             # plot model using t_model / y_model (o modelo pode ter sido simulado em t_model)
             try:
-                self.plot_id.plot(t_model, y_model, name="Modelo Smith (ŷ)", pen=mkPen(color='#555555', width=1.6, style=0))
+                # interpolate model output onto experimental time grid to ensure proper alignment
+                t_exp = np.asarray(t).ravel()
+                t_model_a = np.asarray(t_model).ravel()
+                y_model_a = np.asarray(y_model).ravel()
+                if np.array_equal(t_model_a, t_exp):
+                    y_to_plot = y_model_a
+                else:
+                    # use numpy interpolation; allow extrapolation by filling edges with nearest values
+                    try:
+                        y_to_plot = np.interp(t_exp, t_model_a, y_model_a)
+                    except Exception:
+                        # fallback to simple broadcast if shapes match
+                        y_to_plot = np.interp(t_exp, t_model_a, y_model_a)
+                self.plot_id.plot(t_exp, y_to_plot, name="Modelo Smith (ŷ)", color="#DD0D0D", linewidth=1.6)
             except Exception:
-                # se falhar, tente interpolar para t e plotar
-                try:
-                    y_hat_on_t = np.interp(np.asarray(t).ravel(), t_model, y_model)
-                    self.plot_id.plot(t, y_hat_on_t, name="Modelo Smith (ŷ)", pen=mkPen(color='#555555', width=1.6, style=0))
-                except Exception:
-                    pass
+                pass
 
             # marca t1,t2 aproximados a partir da saída experimental (para visual)
             try:
@@ -259,8 +269,11 @@ class MainWindow(QMainWindow):
                 idx1 = int(np.argmin(np.abs(y - v1)))
                 idx2 = int(np.argmin(np.abs(y - v2)))
                 t1 = float(t[idx1]); t2 = float(t[idx2])
-                self.plot_id.add_vline(t1, label=f"t1={t1:.2f}s")
-                self.plot_id.add_vline(t2, label=f"t2={t2:.2f}s")
+                # mark t1/t2 as points on the experimental curve instead of vertical lines
+                y_t1 = float(y[idx1]) if 0 <= idx1 < len(y) else float(v1)
+                y_t2 = float(y[idx2]) if 0 <= idx2 < len(y) else float(v2)
+                self.plot_id.add_point(t1, y_t1, label=f"t1={t1:.2f}s", size=6)
+                self.plot_id.add_point(t2, y_t2, label=f"t2={t2:.2f}s", size=6)
             except Exception:
                 pass
 
@@ -380,33 +393,96 @@ class MainWindow(QMainWindow):
 
         # plot no PID plot (apenas)
         self.plot_pid.clear()
-        self.plot_pid.plot(t_cl, y_cl, name="Fechada (PID)", pen=mkPen(color='#333333', width=1.6))
+        self.plot_pid.plot(t_cl, y_cl, name="Fechada (PID)", color="#333333", linewidth=1.6)
+        # draw setpoint as horizontal line (based on chosen SP or dataset)
+        sp_val = sp_val_user if sp_val_user is not None else (dataset_amp if dataset_amp is not None else 1.0)
+        try:
+            self.plot_pid.plot(t_cl, np.ones_like(t_cl) * float(sp_val), name="Setpoint (SP)", color='#1f77b4', linewidth=1.0)
+        except Exception:
+            pass
+        # set axis labels
+        try:
+            self.plot_pid.ax.set_xlabel('Tempo (s)')
+            self.plot_pid.ax.set_ylabel('Amplitude')
+        except Exception:
+            pass
         self.plot_pid.autoscale()
 
-        # métricas (tr, mp, ts)
-        tr = compute_tr(t_cl, y_cl) or 0.0
-        mp = compute_mp(y_cl) or 0.0
-        ts = compute_ts(t_cl, y_cl) or 0.0
-        self.tr_field.setText(f"{tr:.4f}")
-        self.ts_field.setText(f"{ts:.4f}")
-        self.mp_field.setText(f"{mp:.4f}")
+        # métricas: compute steady value from last 5% and use thresholds based on steady_value
+        try:
+            y_arr = np.asarray(y_cl).ravel()
+            t_arr = np.asarray(t_cl).ravel()
+            n = len(y_arr)
+            last_n = max(1, int(0.05 * n))
+            steady_value = float(np.mean(y_arr[-last_n:]))
 
-        # marcadores robustos
+            # rise time between 10% and 90% of steady_value (use absolute fractions like the working example)
+            try:
+                low_thresh = 0.1 * steady_value
+                high_thresh = 0.9 * steady_value
+                idx_low = np.where(y_arr >= low_thresh)[0][0]
+                idx_high = np.where(y_arr >= high_thresh)[0][0]
+                tr_val = float(t_arr[idx_high] - t_arr[idx_low])
+            except Exception:
+                tr_val = 0.0
+
+            # settling time (2%) — find last sample outside ±2% and take its time (fallback to end)
+            ts_val = 0.0
+            try:
+                low = steady_value * (1 - 0.02)
+                high = steady_value * (1 + 0.02)
+                idx_out = np.where((y_arr < low) | (y_arr > high))[0]
+                if idx_out.size == 0:
+                    ts_val = float(t_arr[0])
+                else:
+                    last_out = int(idx_out[-1])
+                    # match working example: return time at last out-of-bound sample
+                    ts_val = float(t_arr[last_out])
+            except Exception:
+                ts_val = 0.0
+
+            # maximum overshoot as percent
+            try:
+                if abs(steady_value) < 1e-9:
+                    mp_val = 0.0
+                else:
+                    mp_val = (float(np.max(y_arr)) - steady_value) / abs(steady_value) * 100.0
+            except Exception:
+                mp_val = 0.0
+
+            # erro em regime permanente (entrada final - steady)
+            try:
+                ess_val = float(U[-1]) - steady_value if U is not None else 0.0
+            except Exception:
+                ess_val = 0.0
+
+        except Exception:
+            tr_val = 0.0; ts_val = 0.0; mp_val = 0.0; steady_value = float(sp_val) if sp_val is not None else 0.0; ess_val = 0.0
+
+        # update UI fields
+        self.tr_field.setText(f"{tr_val:.4f}")
+        self.ts_field.setText(f"{ts_val:.4f}")
+        self.mp_field.setText(f"{mp_val:.4f}")
+
+        # markers: rise time point and peak
         try:
-            if tr and tr > 0:
-                self.plot_pid.add_vline(tr, label=f"tr={tr:.2f}s")
+            if tr_val and tr_val > 0 and len(t_arr) > 0:
+                # mark the time corresponding to the end of rise (t at idx_high)
+                idx_tr_mark = int(np.argmin(np.abs(t_arr - (t_arr[0] + tr_val)))) if len(t_arr) > 0 else 0
+                # safer: use idx_high if available
+                try:
+                    idx_tr_mark = int(idx_high)
+                except Exception:
+                    pass
+                if 0 <= idx_tr_mark < len(t_arr):
+                    self.plot_pid.add_point(t_arr[idx_tr_mark], y_arr[idx_tr_mark], label=f"tr={tr_val:.2f}s", size=8)
         except Exception:
             pass
         try:
-            if (y_cl is not None) and (len(y_cl) > 0):
-                idx_peak = int(np.argmax(y_cl))
-                if 0 <= idx_peak < len(t_cl):
-                    self.plot_pid.add_point(t_cl[idx_peak], y_cl[idx_peak], label=f"Mp={mp*100:.2f}%")
-        except Exception:
-            pass
-        try:
-            if ts and ts > 0:
-                self.plot_pid.add_vline(ts, label=f"ts={ts:.2f}s")
+            if (y_arr is not None) and (len(y_arr) > 0):
+                idx_peak = int(np.argmax(y_arr))
+                if 0 <= idx_peak < len(t_arr):
+                    self.plot_pid.add_point(t_arr[idx_peak], y_arr[idx_peak], label=f"Mp={mp_val:.2f}%")
         except Exception:
             pass
 
@@ -433,14 +509,19 @@ class MainWindow(QMainWindow):
 
     def _export_plot(self, plot_widget):
         try:
-            exporter = ImageExporter(plot_widget.plotItem)
+            # if plot_widget has a Matplotlib Figure, use savefig
+            fig = getattr(plot_widget, 'figure', None)
             fname, _ = QFileDialog.getSaveFileName(self, "Salvar figura", DEFAULT_DATA_PATH, "PNG Files (*.png)")
             if not fname:
                 return
             if not fname.lower().endswith(".png"):
                 fname += ".png"
-            exporter.parameters()['width'] = 1600
-            exporter.export(fname)
+            if fig is not None:
+                fig.savefig(fname, dpi=200, bbox_inches='tight')
+            else:
+                # fallback: try to grab a pixmap from the widget
+                pix = plot_widget.grab()
+                pix.save(fname)
             self.lbl_filename.setText(f"Figura salva: {os.path.basename(fname)}")
         except Exception as e:
             self.lbl_filename.setText(f"Erro ao exportar: {e}")
