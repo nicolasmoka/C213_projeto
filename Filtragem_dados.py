@@ -82,22 +82,6 @@ class filtragem:
         theta = data["theta"]
         return (k,tau,theta)
 
-    @staticmethod
-    def calcularCHR(data):
-        k,T,theta = data
-        kp = (0.6*(T))/(k*theta)
-        Ti = T
-        Td = theta/2
-        return (kp,Ti,Td)
-
-    @staticmethod
-    def calcularITAE(data):
-        k,T,theta = data
-        kp = (0.965/k)*((theta/T)**(-0.85))
-        Ti = T/((0.796-0.147)*(theta/T))
-        Td = T * 0.308 * ((theta/T)**(0.929))
-        return (kp,Ti,Td)
-
 # wrapper de conveniência: retorna dicionário padronizado
 def load_mat(path):
     mat = scipy.io.loadmat(path)
