@@ -6,7 +6,7 @@ from utils.metrics import eqm
 
 SAVGOL_WINDOW = 11
 SAVGOL_POLYORDER = 3
-PADE_ORDER = 10
+PADE_ORDER = 20
 
 def _find_first_crossing_time(y, t, target):
     y = np.asarray(y)
@@ -21,7 +21,7 @@ def _find_first_crossing_time(y, t, target):
             return float(t0 + alpha * (t1 - t0))
     return None
 
-def smith_identification(t, y, amplitude=1.0, do_savgol=True, window=SAVGOL_WINDOW, polyorder=SAVGOL_POLYORDER, pade_order=PADE_ORDER):
+def smith_identification(t, y, amplitude=1.0, u=None, do_savgol=True, window=SAVGOL_WINDOW, polyorder=SAVGOL_POLYORDER, pade_order=PADE_ORDER):
     """
     Retorna (params, t_model, y_model)
     - params: dict com k,tau,theta,eqm
@@ -78,8 +78,12 @@ def smith_identification(t, y, amplitude=1.0, do_savgol=True, window=SAVGOL_WIND
 
     model = SystemModel(K, tau, theta, pade_order=pade_order)
     try:
-        # simulate on the experimental time grid (t) so t_sim == t; keep t_model for clarity
-        t_sim, y_sim = model.simulate_step_openloop(t)
+        # If input u is provided, simulate forced response on same T (preferred)
+        if u is not None:
+            t_sim, y_sim = model.simulate_forced_response(t, u)
+        else:
+            # simulate step response on the experimental time grid
+            t_sim, y_sim = model.simulate_step_openloop(t)
     except Exception:
         # fallback: return something aligned to t
         t_sim = t
@@ -89,11 +93,12 @@ def smith_identification(t, y, amplitude=1.0, do_savgol=True, window=SAVGOL_WIND
     y_sim = np.asarray(y_sim).astype(float).ravel()
 
     # agora y_model (y_sim) está no grid t_sim. Para EQM, interpole y_sim em t experimental (t).
+    # Interpole o modelo para o grid experimental usando numpy (robusto)
     try:
-        f_sim = interp1d(t_sim, y_sim, bounds_error=False, fill_value="extrapolate")
-        y_hat_on_t = f_sim(t)    # y_hat interpolado para o grid experimental
-    except Exception:
+        t_sim = np.asarray(t_sim).ravel(); y_sim = np.asarray(y_sim).ravel()
         y_hat_on_t = np.interp(t, t_sim, y_sim)
+    except Exception:
+        y_hat_on_t = np.interp(t, t, y)
 
     eqm_val = eqm(y, y_hat_on_t)
 
