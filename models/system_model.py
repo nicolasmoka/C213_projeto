@@ -55,8 +55,8 @@ class SystemModel:
         """
         # cria PID e planta (com possível atraso via pade)
         # guard against Ti being zero
-        Ti_safe = float(Ti) if (Ti is not None and np.isfinite(Ti) and Ti != 0) else 1e-6
-        pid = ctrl.tf([Kp * Td, Kp, Kp / Ti_safe], [1, 0])
+        #Ti_safe = float(Ti) if (Ti is not None and np.isfinite(Ti) and Ti != 0) else 1e-6
+        pid = ctrl.tf([Kp * Td, Kp, Kp / Ti], [1, 0])
         plant = self.tf_with_delay()
         ol = ctrl.series(pid, plant)
         cl = ctrl.feedback(ol, 1)
@@ -79,5 +79,5 @@ class SystemModel:
             resp = ctrl.forced_response(cl, T=T, U=U)
             T_sim, Y_sim = resp[0], resp[1]
 
-        return np.asarray(T_sim, dtype=float).ravel(), np.asarray(Y_sim, dtype=float).ravel()
+        return [T_sim,Y_sim]
 
