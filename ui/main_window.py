@@ -237,17 +237,17 @@ class MainWindow(QMainWindow):
                 u = np.ones_like(t)
 
             self.plot_id.clear()
-            self.plot_id.plot(t, u, name="Degrau (u)", pen=mkPen(color='#1f77b4', width=1.2))
+            self.plot_id.plot(t, u, name="Degrau (u)", pen=mkPen(color='red', width=1.2))
             self.plot_id.plot(t, y, name="Saída Experimental (y)", pen=mkPen(color='#111111', width=1.6))
 
             # plot model using t_model / y_model (o modelo pode ter sido simulado em t_model)
             try:
-                self.plot_id.plot(t_model, y_model, name="Modelo Smith (ŷ)", pen=mkPen(color='#555555', width=1.6, style=0))
+                self.plot_id.plot(t_model, y_model, name="Modelo Smith (ŷ)", pen=mkPen(color='green', width=2))
             except Exception:
                 # se falhar, tente interpolar para t e plotar
                 try:
                     y_hat_on_t = np.interp(np.asarray(t).ravel(), t_model, y_model)
-                    self.plot_id.plot(t, y_hat_on_t, name="Modelo Smith (ŷ)", pen=mkPen(color='#555555', width=1.6, style=0))
+                    self.plot_id.plot(t, y_hat_on_t, name="Modelo Smith (ŷ)", pen=mkPen(color='orange', width=2, style=Qt.DashLine))
                 except Exception:
                     pass
 
