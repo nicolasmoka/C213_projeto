@@ -1,185 +1,163 @@
-from pyqtgraph import PlotWidget as PGPlotWidget, PlotItem, ViewBox
-import pyqtgraph as pg
-from pyqtgraph import mkPen, ScatterPlotItem, InfiniteLine, TextItem
+"""Static Matplotlib-based PlotWidget
+
+Replaces the previous pyqtgraph interactive widget with a static
+Matplotlib FigureCanvas that preserves a small subset of the old API
+used by the app:
+
+- plot(x, y, name=None, pen=None, clear_legend=False)
+- clear()
+- add_vline(x, label=None, pen=None)
+- add_point(x, y, label=None, size=8, brush=None)
+- add_text(x, y, label)
+- autoscale(margin=0.05)
+
+This keeps the rest of the application code unchanged while providing
+static, non-interactive plots that are rendered once when drawn.
+"""
+
+from PyQt5.QtWidgets import QSizePolicy
+import importlib
+FigureCanvas = None
+for mod_name in ("matplotlib.backends.backend_qtagg", "matplotlib.backends.backend_qt5agg", "matplotlib.backends.backend_qt4agg"):
+    try:
+        mod = importlib.import_module(mod_name)
+        FigureCanvas = getattr(mod, "FigureCanvasQTAgg", None) or getattr(mod, "FigureCanvas", None)
+        if FigureCanvas is not None:
+            break
+    except Exception:
+        continue
+if FigureCanvas is None:
+    raise ImportError("Could not import a Qt FigureCanvas from Matplotlib backends")
+from matplotlib.figure import Figure
+import matplotlib.lines as mlines
+import matplotlib.pyplot as plt
 import numpy as np
 
-# Tema claro (global para pyqtgraph)
-pg.setConfigOption('background', 'w')
-pg.setConfigOption('foreground', 'k')
 
-class SlowZoomViewBox(ViewBox):
-    """
-    ViewBox com zoom mais lento para a roda do mouse.
-    """
-    def __init__(self, zoom_slow_factor=0.02, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.zoom_slow_factor = float(zoom_slow_factor)
-        self.setMouseEnabled(x=True, y=True)
-
-    def wheelEvent(self, ev, axis=None):
-        try:
-            delta = ev.angleDelta().y()
-        except Exception:
-            try:
-                delta = ev.delta()
-            except Exception:
-                delta = 0
-        if delta == 0:
-            return
-        if delta > 0:
-            scale = 1.0 - self.zoom_slow_factor
-        else:
-            scale = 1.0 + self.zoom_slow_factor
-        try:
-            center = self.mapToView(ev.pos())
-            self.scaleBy((scale, scale), center=center)
-        except Exception:
-            super().wheelEvent(ev, axis)
-
-class PlotWidget(PGPlotWidget):
-    def __init__(self, parent=None, title=None, enable_legend=True, zoom_slow_factor=0.2):
-        view_box = SlowZoomViewBox(zoom_slow_factor=zoom_slow_factor)
-        plot_item = PlotItem(viewBox=view_box)
-        super().__init__(parent=parent, plotItem=plot_item)
+class PlotWidget(FigureCanvas):
+    def __init__(self, parent=None, title=None, enable_legend=True, zoom_slow_factor=None):
+        fig = Figure(figsize=(5, 4), dpi=100)
+        super().__init__(fig)
+        self.setParent(parent)
+        self.figure = fig
+        self.ax = fig.add_subplot(111)
+        self._curves = {}  # name -> Line2D
+        self._markers = []
+        self._enable_legend = bool(enable_legend)
         if title:
             try:
-                self.plotItem.setTitle(title)
+                self.ax.set_title(title)
             except Exception:
                 pass
-        try:
-            self.plotItem.showGrid(x=True, y=True, alpha=0.3)
-        except Exception:
-            pass
-        self._curves = {}
-        self._markers = []
-        if enable_legend:
-            try:
-                self.plotItem.addLegend()
-            except Exception:
-                pass
+        # white background
+        self.figure.patch.set_facecolor('white')
+        self.ax.set_facecolor('white')
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.updateGeometry()
 
     def plot(self, x, y, name=None, pen=None, clear_legend=False, **kwargs):
-        """Plota com segurança. Converte x,y para numpy.float arrays."""
+        """Plot x,y on the static Matplotlib axes.
+
+        name: optional curve name used for legend management.
+        pen: ignored (kept for API compatibility). Use kwargs for color/linestyle.
+        """
         try:
             x = np.asarray(x, dtype=float)
             y = np.asarray(y, dtype=float)
         except Exception:
             x = np.array(list(x), dtype=float)
             y = np.array(list(y), dtype=float)
-        if pen is None:
-            pen = mkPen(width=2)
         if name is None:
             name = f"curve_{len(self._curves)}"
         if clear_legend:
             self.clear()
-        if getattr(self, "plotItem", None) is None:
-            return None
-        curve = self.plotItem.plot(x=x, y=y, pen=pen, name=name, **kwargs)
-        self._curves[name] = curve
-        return curve
+        # remove existing curve with same name
+        if name in self._curves:
+            ln = self._curves.pop(name)
+            try:
+                ln.remove()
+            except Exception:
+                pass
+        # accept color and linewidth from kwargs to mimic pen
+        color = kwargs.pop('color', None)
+        linewidth = kwargs.pop('linewidth', 2)
+        line, = self.ax.plot(x, y, label=name if self._enable_legend else None, color=color, linewidth=linewidth, **kwargs)
+        self._curves[name] = line
+        if self._enable_legend:
+            try:
+                # only create legend if there are labeled artists
+                handles, labels = self.ax.get_legend_handles_labels()
+                if any([lab for lab in labels if not str(lab).startswith('_') and str(lab) != '']):
+                    self.ax.legend()
+            except Exception:
+                pass
+        self.draw_idle()
+        return line
 
     def clear(self):
-        """Limpa curvas e marcadores."""
         try:
-            super().clear()
+            self.ax.cla()
         except Exception:
-            try:
-                if self.plotItem is not None:
-                    self.plotItem.clear()
-            except Exception:
-                pass
+            pass
         self._curves.clear()
-        for it in list(self._markers):
-            try:
-                if getattr(self, "plotItem", None) is not None:
-                    self.plotItem.removeItem(it)
-            except Exception:
-                pass
+        # clear markers list
         self._markers.clear()
-        if getattr(self, "plotItem", None) is not None:
+        if self._enable_legend:
             try:
-                # re-create legend after clear (avoid duplicates)
-                self.plotItem.addLegend()
+                leg = self.ax.get_legend()
+                if leg is not None:
+                    leg.remove()
             except Exception:
                 pass
+        self.draw_idle()
 
     def add_vline(self, x, label=None, pen=None):
-        if getattr(self, "plotItem", None) is None:
-            return None
-        if pen is None:
-            pen = mkPen(color='#ffd700', width=1)
         try:
-            vline = InfiniteLine(pos=float(x), angle=90, pen=pen)
-            self.plotItem.addItem(vline)
+            vline = self.ax.axvline(x=float(x), color='#ffd700', linewidth=1)
             self._markers.append(vline)
             if label:
-                try:
-                    vr = self.plotItem.viewRange()
-                    ymax = vr[1][1]
-                except Exception:
-                    ymax = 0
-                txt = TextItem(label, anchor=(0.5, 0))
-                try:
-                    txt.setPos(float(x), ymax)
-                except Exception:
-                    txt.setPos(float(x), 0)
-                self.plotItem.addItem(txt)
+                # place label at top
+                ymax = self.ax.get_ylim()[1]
+                txt = self.ax.text(float(x), ymax, str(label), ha='center', va='bottom')
                 self._markers.append(txt)
+            self.draw_idle()
             return vline
         except Exception:
             return None
 
     def add_point(self, x, y, label=None, size=8, brush=None):
-        if getattr(self, "plotItem", None) is None:
-            return None
         try:
-            sp = ScatterPlotItem([float(x)], [float(y)], size=size, brush=brush)
-            self.plotItem.addItem(sp)
-            self._markers.append(sp)
+            sc = self.ax.scatter([float(x)], [float(y)], s=float(size)**2, c=[brush if brush is not None else 'C0'])
+            self._markers.append(sc)
             if label:
-                txt = TextItem(label, anchor=(0, 1))
-                txt.setPos(float(x), float(y))
-                self.plotItem.addItem(txt)
+                txt = self.ax.text(float(x), float(y), str(label), ha='left', va='bottom')
                 self._markers.append(txt)
-            return sp
+            self.draw_idle()
+            return sc
         except Exception:
             return None
 
     def add_text(self, x, y, label):
-        if getattr(self, "plotItem", None) is None:
-            return None
         try:
-            txt = TextItem(label, anchor=(1, 1))
-            txt.setPos(float(x), float(y))
-            self.plotItem.addItem(txt)
+            txt = self.ax.text(float(x), float(y), str(label), ha='right', va='top')
             self._markers.append(txt)
+            self.draw_idle()
             return txt
         except Exception:
             return None
 
     def autoscale(self, margin=0.05):
-        if getattr(self, "plotItem", None) is None:
-            return
-        xs = []; ys = []
-        for c in list(self._curves.values()):
-            try:
-                data = c.getData()
-                if data is None:
-                    continue
-                x = np.asarray(data[0]); y = np.asarray(data[1])
-                if x.size == 0 or y.size == 0:
-                    continue
-                xs.append((float(x.min()), float(x.max()))); ys.append((float(y.min()), float(y.max())))
-            except Exception:
-                continue
+        # autoscale based on existing curves
         try:
-            if xs:
-                xmin = min([a for a,b in xs]); xmax = max([b for a,b in xs])
-                dx = (xmax - xmin) * margin if (xmax - xmin) != 0 else 1.0
-                self.plotItem.setXRange(xmin - dx, xmax + dx, padding=0)
-            if ys:
-                ymin = min([a for a,b in ys]); ymax = max([b for a,b in ys])
-                dy = (ymax - ymin) * margin if (ymax - ymin) != 0 else 1.0
-                self.plotItem.setYRange(ymin - dy, ymax + dy, padding=0)
+            self.ax.relim()
+            self.ax.autoscale_view()
+            # apply margin
+            xmin, xmax = self.ax.get_xlim()
+            ymin, ymax = self.ax.get_ylim()
+            dx = (xmax - xmin) * margin if (xmax - xmin) != 0 else 1.0
+            dy = (ymax - ymin) * margin if (ymax - ymin) != 0 else 1.0
+            self.ax.set_xlim(xmin - dx, xmax + dx)
+            self.ax.set_ylim(ymin - dy, ymax + dy)
+            self.draw_idle()
         except Exception:
             pass
