@@ -28,5 +28,4 @@ def itae_from_params(k, tau, theta):
     kp = ((A/k)*((theta/tau)**(B)))
     ti = ((tau)/(C+D*(theta/tau)))
     td = (tau*E*(theta/tau)**F)
-    print(ti)
     return (kp, ti, td)
