@@ -100,18 +100,25 @@ Método | Localização
 **ITAE** -> tuning/tuning_methods.py
 
 ### 6. Interface Gráfica
+
 **Tela inicial do projeto:**
 ![alt text](images/passo1.png)
+
 **Aba de identificação vazia:**
 ![alt text](images/passo2.png)
+
 **Escolha do dataset:**
 ![alt text](images/passo3.png)
+
 **Aba de identificação com gráfico e parâmetros do sistema:**
 ![alt text](images/passo4.png)
+
 **Aba de controle PID vazia:**
 ![alt text](images/passo5.png)
+
 **Seleção do modo de sintonia (manual/calculado e método de sintonia CHR ou ITAE):**
 ![alt text](images/passo6.png)
+
 **Aba de Controle PID com gráfico e parâmetros do modelo:**
 ![alt text](images/passo7.png)
 
@@ -137,5 +144,6 @@ Nesse projeto em específico foram utilizados os métodos CHR (sem sobressinal),
 
 **CHR:**
 ![alt text](images/Curva_CHR.png)
+
 **ITAE:**
 ![alt text](images/Curva_ITAE.png)
