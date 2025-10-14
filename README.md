@@ -42,8 +42,9 @@ Pasta | Descrição
 
 **models:** Contém o modelo matemático FOPDT e simulações da resposta do sistema.
 
-**tuning:** Implementa os métodos de sintonia PID (CHR e ITAE). 
-ui: Interface gráfica com PyQt5, incluindo visualização de gráficos e interação com o usuário.
+**tuning:** Implementa os métodos de sintonia PID (CHR e ITAE).
+
+**ui:** Interface gráfica com PyQt5, incluindo visualização de gráficos e interação com o usuário.
 
 **metrics:** Cálculo de métricas como EQM, tempo de subida e overshoot.
 
